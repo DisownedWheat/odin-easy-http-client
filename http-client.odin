@@ -153,6 +153,7 @@ client_run :: proc(client: ^Http_Client) -> curl.CURLcode {
 	curl.easy_setopt(client.curl_handle, curl.OPT_HEADERFUNCTION, default_header_write_cb)
 	curl.easy_setopt(client.curl_handle, curl.OPT_WRITEDATA, chunk)
 	curl.easy_setopt(client.curl_handle, curl.OPT_HEADERDATA, chunk)
+	curl.easy_setopt(client.curl_handle, curl.OPT_SSL_OPTIONS, curl.SSLOPT_NATIVE_CA)
 
 	switch client.method {
 	case .GET:

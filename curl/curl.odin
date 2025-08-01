@@ -1274,10 +1274,9 @@ MOPT_LASTENTRY :: 17
 import "core:dynlib"
 import "core:fmt"
 
-when ODIN_OS == .Linux {foreign import libcurl "system:libcurl.so"}
+when ODIN_OS == .Linux do foreign import libcurl "system:libcurl.so"
 
-// TODO: Get windows build working with mingw
-when ODIN_OS == .Windows {foreign import libcurl "./windows/libcurl.a"}
+when ODIN_OS == .Windows do foreign import libcurl "libcurl-x64.lib"
 
 /* Procedures */
 @(link_prefix = "curl_")
