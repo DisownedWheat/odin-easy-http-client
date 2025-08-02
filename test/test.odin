@@ -9,7 +9,7 @@ import "core:testing"
 URL: string = "ENTER URL HERE"
 
 @(test)
-test_this :: proc(t: ^testing.T) {
+test_get :: proc(t: ^testing.T) {
 	defer free_all(context.allocator)
 
 	context.logger = log.create_console_logger()
