@@ -242,7 +242,6 @@ client_init :: proc {
 client_free :: proc(client: ^Http_Client) {
 	curl.easy_cleanup(client.curl_handle)
 	vmem.arena_destroy(&client.arena)
-	free(client)
 	log.debug("Client Freed")
 }
 
