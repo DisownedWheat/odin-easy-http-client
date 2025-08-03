@@ -1,7 +1,6 @@
 package test
 
 import http_client "../"
-import "../curl"
 import "core:encoding/json"
 import "core:log"
 import "core:testing"
@@ -17,7 +16,7 @@ test_get :: proc(t: ^testing.T) {
 
 	response, code := http_client.http_get(URL)
 	defer http_client.client_free(response.client)
-	if code != curl.E_OK {
+	if code != .E_OK {
 		log.error("Curl Response Not OK")
 		testing.fail(t)
 	}
@@ -41,7 +40,7 @@ test_post :: proc(t: ^testing.T) {
 	headers["Content-Type"] = {"application/json"}
 
 	response, code := http_client.http_post(URL, string(data), headers)
-	if code != curl.E_OK {
+	if code != .E_OK {
 		log.error("Curl Response Not OK")
 		testing.fail(t)
 	}
@@ -52,7 +51,7 @@ test_post :: proc(t: ^testing.T) {
 	http_client.client_free(response.client)
 	response, code = http_client.http_post_json(URL, string(data))
 	defer http_client.response_free(response)
-	if code != curl.E_OK {
+	if code != .E_OK {
 		log.error("Curl Response Not OK")
 		testing.fail(t)
 	}

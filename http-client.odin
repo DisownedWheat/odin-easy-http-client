@@ -115,7 +115,7 @@ default_header_write_cb :: proc "c" (
 	return size * nitems
 }
 
-client_run :: proc(client: ^Http_Client) -> curl.CURLcode {
+client_run :: proc(client: ^Http_Client) -> Curl_Code {
 	context.allocator = client.allocator
 	to_cstr := strings.clone_to_cstring
 
@@ -176,7 +176,7 @@ client_run :: proc(client: ^Http_Client) -> curl.CURLcode {
 	log.debug("Performed Curl Call")
 	if res_code != curl.E_OK {
 		log.fatalf("ERROR WITH CURL %s", curl.easy_strerror(res_code))
-		return res_code
+		return (Curl_Code)(res_code)
 	}
 
 	res := new(Http_Response, allocator = client.allocator)
@@ -195,7 +195,7 @@ client_run :: proc(client: ^Http_Client) -> curl.CURLcode {
 	res.client = client
 
 	log.debug("Response mapped")
-	return res_code
+	return (Curl_Code)(res_code)
 }
 
 client_init_none :: proc(client: ^Http_Client) -> mem.Allocator_Error {
@@ -256,7 +256,7 @@ http_get :: proc(
 	allocator := context.allocator,
 ) -> (
 	^Http_Response,
-	curl.CURLcode,
+	Curl_Code,
 ) {
 	client := new(Http_Client)
 	err := client_init(client)
@@ -279,7 +279,7 @@ http_post :: proc(
 	allocator := context.allocator,
 ) -> (
 	^Http_Response,
-	curl.CURLcode,
+	Curl_Code,
 ) {
 	client := new(Http_Client)
 	err := client_init(client)
@@ -303,7 +303,7 @@ http_post_json :: proc(
 	allocator := context.allocator,
 ) -> (
 	^Http_Response,
-	curl.CURLcode,
+	Curl_Code,
 ) {
 
 	client := new(Http_Client)
