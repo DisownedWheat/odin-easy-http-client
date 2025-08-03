@@ -19,6 +19,7 @@ Method :: enum {
 	DELETE,
 }
 
+// Used internally to keep references to curl response strings
 Http_Chunk :: struct {
 	ctx:         runtime.Context,
 	response:    string,
@@ -34,6 +35,9 @@ Http_Response :: struct {
 	client:  ^Http_Client,
 }
 
+// The main type used by public procedures
+// Http_Client has its own arena allocator to handle allocations
+// Should only be freed using the client_free proc
 Http_Client :: struct {
 	curl_handle: Curl_handle,
 	url:         string,
@@ -115,6 +119,8 @@ default_header_write_cb :: proc "c" (
 	return size * nitems
 }
 
+// Runs the request using the Http_Client
+// All allocations are done using the Http_Client internal arena allocator
 client_run :: proc(client: ^Http_Client) -> Curl_Code {
 	context.allocator = client.allocator
 	to_cstr := strings.clone_to_cstring
@@ -239,12 +245,17 @@ client_init :: proc {
 	client_init_url_and_method,
 }
 
+// Destroys the arena created by the client and frees all memory associated with it
+// The Http_Client should not be used after this call
 client_free :: proc(client: ^Http_Client) {
 	curl.easy_cleanup(client.curl_handle)
 	vmem.arena_destroy(&client.arena)
 	log.debug("Client Freed")
 }
 
+// Destroys the arena created by the client and frees all memory associated with it
+// This just follows the pointer in Http_Response to free the client using client_free
+// The Http_Response should not be used after this call
 response_free :: proc(response: ^Http_Response) {
 	client_free(response.client)
 }
