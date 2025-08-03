@@ -59,3 +59,29 @@ test_post :: proc(t: ^testing.T) {
 	is_ok = response.code == 200
 	testing.expect(t, is_ok, "Response was not 200")
 }
+
+@(test)
+test_client :: proc(t: ^testing.T) {
+	defer free_all(context.allocator)
+	context.logger = log.create_console_logger()
+	defer log.destroy_console_logger(context.logger)
+
+	test_data: map[string]string
+	test_data["Hello"] = "World"
+	data, _ := json.marshal(test_data)
+
+	client: http_client.Http_Client
+	defer http_client.client_free(&client)
+	err := http_client.client_init(&client, URL)
+	testing.expect(t, err == nil, "Error creating client")
+
+	client.method = .POST
+	client.body = string(data)
+	client.headers["Content-Type"] = {"application/json"}
+
+	code := http_client.client_run(&client)
+	testing.expect(t, code == .E_OK, "Error in curl message")
+
+	testing.expect(t, client.response.code == 200, "Client response was not 200")
+	log.info(client.response)
+}
