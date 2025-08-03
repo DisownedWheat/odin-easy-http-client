@@ -1,5 +1,12 @@
 package http_client
 
+import "curl"
+
+curl_strerror :: proc(code: Curl_Code) -> string {
+	str := curl.easy_strerror((curl.CURLcode)(code))
+	return string(str)
+}
+
 // Re-exposes curl codes from curl package
 Curl_Code :: enum {
 	E_OK                       = 0,
