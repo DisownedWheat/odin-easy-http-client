@@ -83,5 +83,23 @@ test_client :: proc(t: ^testing.T) {
 	testing.expect(t, code == .E_OK, "Error in curl message")
 
 	testing.expect(t, client.response.code == 200, "Client response was not 200")
-	log.info(client.response)
+}
+
+@(test)
+custom_allocator :: proc(t: ^testing.T) {
+	context.logger = log.create_console_logger()
+
+	client: http_client.Http_Client
+	err := http_client.client_init(&client, URL, context.temp_allocator)
+	testing.expect(t, err == nil, "Error initialising client")
+	defer {
+		http_client.client_free(&client)
+		log.destroy_console_logger(context.logger)
+		free_all(context.temp_allocator)
+	}
+
+	code := http_client.client_run(&client)
+	testing.expect(t, code == .E_OK, "Error in curl message")
+
+	testing.expect(t, client.response.code == 200, "Client response was not 200")
 }

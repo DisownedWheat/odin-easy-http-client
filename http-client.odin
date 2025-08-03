@@ -35,6 +35,18 @@ Http_Response :: struct {
 	client:  ^Http_Client,
 }
 
+@(private)
+Internal_Arena_Allocator :: struct {
+	arena:     vmem.Arena,
+	allocator: mem.Allocator,
+}
+
+@(private)
+Internal_Allocator :: union {
+	Internal_Arena_Allocator,
+	mem.Allocator,
+}
+
 // The main type used by public procedures
 // Http_Client has its own arena allocator to handle allocations
 // Should only be freed using the client_free proc
@@ -44,8 +56,7 @@ Http_Client :: struct {
 	headers:     Http_Headers,
 	method:      Method,
 	body:        string,
-	arena:       vmem.Arena,
-	allocator:   mem.Allocator,
+	allocator:   Internal_Allocator,
 	response:    ^Http_Response,
 }
 
@@ -122,16 +133,31 @@ default_header_write_cb :: proc "c" (
 // Runs the request using the Http_Client
 // All allocations are done using the Http_Client internal arena allocator
 client_run :: proc(client: ^Http_Client) -> Curl_Code {
-	context.allocator = client.allocator
 	to_cstr := strings.clone_to_cstring
+
+	chunk: ^Http_Chunk
+	alloc_err: mem.Allocator_Error
+	switch alloc in client.allocator {
+	case Internal_Arena_Allocator:
+		chunk, alloc_err = new(Http_Chunk, alloc.allocator)
+		context.allocator = alloc.allocator
+		chunk^ = {
+			headers = make(Http_Headers, alloc.allocator),
+			ctx     = context,
+		}
+	case runtime.Allocator:
+		chunk, alloc_err = new(Http_Chunk, alloc)
+		context.allocator = alloc
+		chunk^ = {
+			headers = make(Http_Headers, alloc),
+			ctx     = context,
+		}
+	}
+
+	context = chunk.ctx
 
 	curl.global_init(curl.GLOBAL_ALL)
 
-	chunk, alloc_err := new(Http_Chunk, client.allocator)
-	chunk^ = {
-		headers = make(Http_Headers),
-		ctx     = context,
-	}
 	log.debug("Instantiated Chunk")
 
 	slist: ^curl.slist
@@ -144,8 +170,8 @@ client_run :: proc(client: ^Http_Client) -> Curl_Code {
 	if client.headers != nil {
 		defer log.debug("Copied headers to client")
 		for key, value in client.headers {
-			value_str := strings.join(value[:], ",", allocator = client.allocator)
-			str := strings.concatenate({key, ":", value_str}, allocator = client.allocator)
+			value_str := strings.join(value[:], ",")
+			str := strings.concatenate({key, ":", value_str})
 			slist = curl.slist_append(slist, to_cstr(str))
 		}
 		curl.easy_setopt(client.curl_handle, curl.OPT_HTTPHEADER, slist)
@@ -185,7 +211,7 @@ client_run :: proc(client: ^Http_Client) -> Curl_Code {
 		return (Curl_Code)(res_code)
 	}
 
-	res := new(Http_Response, allocator = client.allocator)
+	res := new(Http_Response)
 	log.debug("Allocated Response")
 
 	if res_code == curl.E_OK {
@@ -204,25 +230,56 @@ client_run :: proc(client: ^Http_Client) -> Curl_Code {
 	return (Curl_Code)(res_code)
 }
 
-client_init_none :: proc(client: ^Http_Client) -> mem.Allocator_Error {
-	arena: vmem.Arena
-	err := vmem.arena_init_growing(&arena)
-	if err != nil {
-		return err
+client_init_none :: proc(
+	client: ^Http_Client,
+	allocator: Internal_Allocator = nil,
+) -> mem.Allocator_Error {
+
+	switch t in allocator {
+	case nil:
+		wrapper := new(Internal_Arena_Allocator)
+		arena := new(vmem.Arena)
+		err := vmem.arena_init_growing(arena)
+		wrapper.arena = arena^
+
+		if err != nil {
+			return err
+		}
+
+		wrapper.allocator = vmem.arena_allocator(arena)
+		context.allocator = wrapper.allocator
+		cu := (Curl_handle)(curl.easy_init())
+
+		client.curl_handle = cu
+		client.allocator = wrapper^
+
+	case Internal_Arena_Allocator:
+		context.allocator = t.allocator
+		cu := (Curl_handle)(curl.easy_init())
+		client^ = {
+			curl_handle = cu,
+			allocator   = t,
+		}
+	case runtime.Allocator:
+		context.allocator = t
+		cu := (Curl_handle)(curl.easy_init())
+		client^ = {
+			curl_handle = cu,
+			allocator   = t,
+		}
 	}
-	cu := (Curl_handle)(curl.easy_init())
-	client^ = {
-		curl_handle = cu,
-		arena       = arena,
-	}
-	alloc := vmem.arena_allocator(&client.arena)
-	client.allocator = alloc
 
 	return nil
 }
 
-client_init_url :: proc(client: ^Http_Client, url: string) -> (err: mem.Allocator_Error) {
-	client_init_none(client) or_return
+client_init_url :: proc(
+	client: ^Http_Client,
+	url: string,
+	allocator: Internal_Allocator = nil,
+) -> (
+	err: mem.Allocator_Error,
+) {
+	client_init_none(client, allocator) or_return
 	client.url = url
 	return
 }
@@ -231,10 +288,11 @@ client_init_url_and_method :: proc(
 	client: ^Http_Client,
 	url: string,
 	method: Method,
+	allocator: Internal_Allocator = nil,
 ) -> (
 	err: mem.Allocator_Error,
 ) {
-	client_init_url(client, url) or_return
+	client_init_url(client, url, allocator) or_return
 	client.method = method
 	return
 }
@@ -247,9 +305,15 @@ client_init :: proc {
 
 // Destroys the arena created by the client and frees all memory associated with it
 // The Http_Client should not be used after this call
+// This is still necessary if using a custom allocator
 client_free :: proc(client: ^Http_Client) {
 	curl.easy_cleanup(client.curl_handle)
-	vmem.arena_destroy(&client.arena)
+
+	switch &t in client.allocator {
+	case Internal_Arena_Allocator:
+		vmem.arena_destroy(&t.arena)
+	case runtime.Allocator:
+	}
 	log.debug("Client Freed")
 }
 
@@ -323,7 +387,10 @@ http_post_json :: proc(
 	}
 	new_headers := headers
 	if new_headers == nil {
-		new_headers = make(map[string][]string, client.allocator)
+		new_headers = make(
+			map[string][]string,
+			client.allocator.(Internal_Arena_Allocator).allocator,
+		)
 	}
 	new_headers["Content-Type"] = {"application/json"}
 
