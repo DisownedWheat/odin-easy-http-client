@@ -1274,9 +1274,15 @@ MOPT_LASTENTRY :: 17
 import "core:dynlib"
 import "core:fmt"
 
-when ODIN_OS == .Linux do foreign import libcurl "system:libcurl.so"
-
-when ODIN_OS == .Windows do foreign import libcurl "libcurl-x64.lib"
+when ODIN_OS == .Linux {
+	foreign import libcurl "system:libcurl.so"
+}
+when ODIN_OS == .Windows {
+	foreign import libcurl {"windows/libbrotlicommon.a", "windows/libbrotlidec.a", "windows/libcrypto.a", "windows/libcurl.dll.a", "windows/libnghttp2.a", "windows/libnghttp3.a", "windows/libngtcp2.a", "windows/libngtcp2_crypto_quictls.a", "windows/libpsl.a", "windows/libssh2.a", "windows/libssl.a", "windows/libz.a", "windows/libzstd.a", "windows/libcurl.a"}
+}
+when ODIN_OS == .Darwin {
+	foreign import libcurl "system:libcurl.so"
+}
 
 /* Procedures */
 @(link_prefix = "curl_")

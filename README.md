@@ -4,10 +4,7 @@ A very basic wrapper around libcurl that works on Linux and Windows (and maybe m
 
 ## Usage
 
-- For Linux users ensure `libcurl` is installed on your system.
-- For Windows users you have two options:
-  - Use your system install of `libcurl-x64.dll`
-  - Copy/move the included `libcurl-x64.dll` alongside the compiled output of your program.
+- For Linux users ensure a dev version of `libcurl` is installed on your system.
 
 ## Examples
 
